@@ -1,0 +1,62 @@
+variant: fcos
+version: 1.5.0
+passwd:
+  users:
+  - name: andy
+    groups:
+      - sudo
+    ssh_authorized_keys:
+      - ssh-rsa AAAA
+storage:
+  disks:
+    - device: /dev/xvdh
+      wipe_table: false
+      partitions:
+        - number: 1
+          label: nginx
+            #size_mib: 4096
+  filesystems:
+    - path: /var/opt/nginx
+      device: /dev/disk/by-partlabel/nginx
+      format: ext4
+      wipe_filesystem: false
+      label: nginx
+      with_mount_unit: true
+  files:
+    - path: /var/opt/port.sh
+      contents: 
+        inline: |
+          #!/bin/bash
+          sysctl -w net.ipv4.ip_unprivileged_port_start=80
+    - path: /var/opt/content/index.html
+      contents:
+        inline: |
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Nginx on CoreOS</title>
+            </head>
+            <body>
+              <p>Nginx on CoreOS</p>
+            </body>
+          </html>
+systemd:
+  units:
+    - name: web.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=NginxWebServer
+        After=network-online.target
+        Wants=network-online.target
+
+        [Service]
+        TimeoutStartSec=0
+        ExecStartPre=/bin/sh /var/opt/port.sh
+        ExecStartPre=-/bin/podman kill web-server
+        ExecStartPre=-/bin/podman rm web-server
+        ExecStartPre=/bin/podman pull docker.io/library/nginx:latest
+        ExecStart=/bin/podman run --rm -d --name web-server -p 80:80 -v /var/opt/content/:/usr/share/nginx/html/:z docker.io/library/nginx:latest
+
+        [Install]
+        WantedBy=multi-user.target
